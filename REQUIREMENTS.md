@@ -25,4 +25,6 @@ layer above via TLS, so we will not include it
 - We will detect corrupted packets
 
 ## Timeline
-?
+* Req and Imp Spec due on Tuesday 11th Nov
+* Project code and demo due on Saturday 22nd Nov
+We plan to be done coding by the 18th of November so we can test with hardware if possible.
