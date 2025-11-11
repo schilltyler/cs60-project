@@ -39,7 +39,7 @@ def handle_error(missing_packets)
 ## Psuedo Code
 
 ### parse_packet(packet)
-```python
+```
 Sniff for packets that are on the port we choose
 Check if the syn or ack (or both for syn-ack) bits are set
 Do this by checking for substring within data section of packet
