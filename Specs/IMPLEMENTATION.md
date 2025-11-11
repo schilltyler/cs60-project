@@ -96,7 +96,6 @@ Return the packet(s)
 Use send() to send packet that was built using build_packet
 ```
 
-Basil
 ### handle_error(missing_packets)
 ```
 Call build_packet to rebuild the data packets
