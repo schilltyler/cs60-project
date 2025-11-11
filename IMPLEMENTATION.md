@@ -114,7 +114,7 @@ After done sending, resend all lost packets
 ## Data Structures
 
 * Python list to keep track of data indicies in each packet so can easily resend
-* This list be the sequences numbers we sent, and we will remove sequence
+* This list will be the sequences numbers we sent, and we will remove sequence
 numbers as they are acknowledged
 
 ### Our "TCP" Packet
@@ -131,7 +131,7 @@ Already have:
 * Destination port
 * Checksum
 
-UDP header will always be 4 bytes, so after that is when "TCP" packet will start
+UDP header will always be 4 bytes, so after that is when "TCP" packet will start. 
 Put simply, we will just attach the TCP header into the start of the data section
 the UDP packet
 
