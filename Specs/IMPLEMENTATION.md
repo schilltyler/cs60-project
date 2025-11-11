@@ -84,18 +84,18 @@ If the ack bit is set and not the syn bit:
 ```
 Basil
 ### build_packet(sequence_num, ack_num, flags, data, window)
-```python
+```
 
 ```
 
 ### send_packet(packet)
-```python
+```
 Use send() to send packet that was built using build_packet
 ```
 
 Basil
 ### handle_error(missing_packets)
-```python
+```
 
 ```
 
