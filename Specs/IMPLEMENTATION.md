@@ -82,10 +82,13 @@ If the ack bit is set and not the syn bit:
         There was an error in sending data
         Resend
 ```
-Basil
+
 ### build_packet(sequence_num, ack_num, flags, data, window)
 ```
-
+Read arguments passed in to determine what type of packet to build (SYN, SYNACK, ACk, data, etc.)
+Use the arguments passed in to calculate error info (checksum)
+Build the different packet layers and convert the packet(s) to binary to prepare for sending
+Return the packet(s)
 ```
 
 ### send_packet(packet)
@@ -96,7 +99,10 @@ Use send() to send packet that was built using build_packet
 Basil
 ### handle_error(missing_packets)
 ```
-
+Call build_packet to rebuild the data packets
+Index the specific data packets that were missing
+Resend only the missing packets
+Repeat until no missing packets
 ```
 
 Send SYN and wait
