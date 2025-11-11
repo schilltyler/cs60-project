@@ -1,35 +1,38 @@
 # Implementation
 
 ## Function Prototypes
-Include parameters
 
-* Function to read and parse received packets
+### Parse Packet
+A function to read and parse received packets
 ```python
 def parse_packet(packet)
 ```
-`packet` = a UDP packet we sniffed
+* `packet` = a UDP packet we sniffed
 
-* Function to build packets
+### Build Packet
+A function to build packets
 ```python
 def build_packet(sequence_num, ack_num, flags, data, window)
 ```
-`sequence_num` = the sequence number we want the packet to have
-`ack_num` = the acknowledgement number we want the packet to have
-`data` = the data we want the packet to have
-`window` = the amount of packets we can still send before the receiver
+* `sequence_num` = the sequence number we want the packet to have
+* `ack_num` = the acknowledgement number we want the packet to have
+* `data` = the data we want the packet to have
+* `window` = the amount of packets we can still send before the receiver
 stops accepting packets
 
-* Function to send packets
+### Send Packet
+A function to send packets
 ```python
 def send_packet(packet)
 ```
-`packet` = the packet we constructed using `build_packet`
+* `packet` = the packet we constructed using `build_packet`
 
-* Function to resend a specific packet (selective repeat) when user doesn't receive
+### Handle Error
+A function to resend a specific packet (selective repeat) when user doesn't receive
 ```python
 def handle_error(missing_packets)
 ```
-`missing_packets` = a list of packets that we have not received an ack for
+* `missing_packets` = a list of packets that we have not received an ack for
 
 
 
