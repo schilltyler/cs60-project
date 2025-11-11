@@ -131,7 +131,7 @@ Already have:
 * Destination port
 * Checksum
 
-UDP header will always be 4 bytes, so after that is when "TCP" packet will start. 
+UDP header will always be 8 bytes, so after that is when "TCP" packet will start. 
 Put simply, we will just attach the TCP header into the start of the data section
 the UDP packet
 
