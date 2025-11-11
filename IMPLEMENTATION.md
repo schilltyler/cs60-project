@@ -7,27 +7,34 @@ Include parameters
 ```python
 def parse_packet(packet)
 ```
+`packet` = a UDP packet we sniffed
 
 * Function to build packets
 ```python
-def build_packet(type, payload)
+def build_packet(sequence_num, ack_num, flags, data, window)
 ```
+`sequence_num` = the sequence number we want the packet to have
+`ack_num` = the acknowledgement number we want the packet to have
+`data` = the data we want the packet to have
+`window` = the amount of packets we can still send before the receiver
+stops accepting packets
 
 * Function to send packets
 ```python
 def send_packet(packet)
 ```
+`packet` = the packet we constructed using `build_packet`
 
 * Function to resend a specific packet (selective repeat) when user doesn't receive
 ```python
 def handle_error(missing_packets)
 ```
+`missing_packets` = a list of packets that we have not received an ack for
 
 
 
 ## Psuedo Code
 
-Tyler
 ### parse_packet(packet)
 ```python
 Sniff for packets that are on the port we choose
@@ -37,16 +44,17 @@ And also for fields that are only a bit, can check if they
 are greater than 0
 If the syn bit is set and not the ack bit:
     ** We just received SYN **
-    Check 
     Set the ack number sequence number plus 1
     Set the sequence number to something random
     Set the syn bit
     Set the ack bit
+    Call build_packet() with these parameters
 If the syn bit is set and the ack bit is set:
     ** We just received SYN-ACK **
     Set ack number to sequence number plus 1
     Set the ack bit
     Unset the syn bit
+    Call build_packet() with these parameters
 If the ack bit is set and not the syn bit:
     ** We just received ACK **
     If ack number is last syn sent plus 1:
@@ -62,19 +70,24 @@ If the ack bit is set and not the syn bit:
     the size of the last data sent
     If both things true:
         We successfully sent data
+        Set sequence number to 0
+        Set ack number to 1
+        Add data to packet
+        Add window number to packet
+        Call build_packet() with these parameters
     If one of those things not true:
         There was an error in sending data
         Resend
 ```
 Basil
-### build_packet(sequence #, ack #, data, window)
+### build_packet(sequence_num, ack_num, flags, data, window)
 ```python
 
 ```
-Tyler
+
 ### send_packet(packet)
 ```python
-Use send() to send packet that was build using build_packet
+Use send() to send packet that was built using build_packet
 ```
 
 Basil
@@ -98,8 +111,8 @@ After done sending, resend all lost packets
 ## Data Structures
 
 * Python list to keep track of data indicies in each packet so can easily resend
-* Maybe have this list be the sequences numbers we sent and then remove
-items from the list as they are acknowledged?
+* This list be the sequences numbers we sent, and we will remove sequence
+numbers as they are acknowledged
 
 ### Our "TCP" Packet
 ** In this order **
@@ -115,12 +128,20 @@ Already have:
 * Destination port
 * Checksum
 
-UDP header will always be 4 bytes, so that's when "TCP" packet will start
+UDP header will always be 4 bytes, so after that is when "TCP" packet will start
+Put simply, we will just attach the TCP header into the start of the data section
+the UDP packet
 
 ## Error Handling
 
 * Implement selective repeat algorithm
 * Checksum to ensure packet integrity
 
-## Notes
-* Can use iptables to create a rule that simulates packet drop when testing
+## Testing Plan
+* We will hard-code a certain amount of packets to send
+* We will have a client and a server, so one will send the initial syn packet
+to get the connection going (that will be the only difference between the two files,
+otherwise, they function the same way and have the same code)
+* We will send the hard-coded amount of data packets
+* We will us iptables to create rules that will simulate packet drop
+(this will be used to test our error handling mechanisms)
