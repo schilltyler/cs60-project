@@ -85,7 +85,7 @@ If the ack bit is set and not the syn bit:
 
 ### build_packet(sequence_num, ack_num, flags, data, window)
 ```
-Read arguments passed in to determine what type of packet to build (SYN, SYNACK, ACk, data, etc.)
+Read arguments passed in to determine what type of packet to build (SYN, SYNACK, ACK, data, etc.)
 Use the arguments passed in to calculate error info (checksum)
 Build the different packet layers and convert the packet(s) to binary to prepare for sending
 Return the packet(s)
@@ -104,6 +104,8 @@ Resend only the missing packets
 Repeat until no missing packets
 ```
 
+### Overall Program Flow:
+```
 Send SYN and wait
 
 Receive SYNACK and then send ACK
@@ -114,6 +116,8 @@ If multiple ACKs received (missing packet), then keep track of which packet(s) a
 
 After done sending, resend all lost packets
 
+Close connection
+```
 
 
 ## Data Structures
