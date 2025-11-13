@@ -23,7 +23,7 @@ stops accepting packets
 ### Send Packet
 A function to send packets
 ```python
-def send_packet(packet)
+def send_packet(packet, ip, port)
 ```
 * `packet` = the packet we constructed using `build_packet`
 
