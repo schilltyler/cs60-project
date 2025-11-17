@@ -14,6 +14,8 @@ SYNACK = 00010010
 # Globals
 # keeps track of the sequence numbers we have sent
 sequence_nums_sent[]
+# keeps track of the fin-related sequence numbers we have sent
+fin_nums_sent[]
 # keeps track of sizes of the data we have sent
 data_sizes_sent[]
 # keeps track of the packets we have sent
@@ -79,10 +81,15 @@ def parse_packet(packet):
 
             build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
 
-        else rec_flags == 16: # ACK set
+        elif rec_flags == 16: # ACK set
             if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
                 # handshake complete, start sending data
                 set_data_packet_parameters(packet)
+
+            # check if is an ACK to a FIN
+            elif rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
+                # want to see if we are ready to receive a FIN from other side
+                # or if we have more data to send
 
             else:
                 if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
@@ -90,6 +97,51 @@ def parse_packet(packet):
                 else:
                     # error sending data . . . resend
                     send_packet(sent_packets[len(send_packets) - 1])
+        elif rec_flags == 1: #fin
+            # check if this is a response to a FIN
+            if rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
+                # what do we do if we did not receive ack before this?
+                src_port: int = 5555
+                dst_port: int = packet[UDP].sport
+                seq_num: int = 0 # doesn't matter what this is
+                ack_num: int = rec_seq_num + 1
+                flags: int = 16    # 00010000 (sets only ACK bit)
+                data: bytes = b""
+                window: int = 0
+
+                sequence_nums_sent.append(seq_num)
+                data_sizes_sent.append(len(data))
+
+                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+            # or the first fin in the teardown sequence
+            else
+                # first send an ACK
+                src_port: int = 5555
+                dst_port: int = packet[UDP].sport
+                seq_num: int = 0 # doesn't matter what this is
+                ack_num: int = rec_seq_num + 1
+                flags: int = 16    # 00010000 (sets only ACK bit)
+                data: bytes = b""
+                window: int = 0
+
+                sequence_nums_sent.append(seq_num)
+                data_sizes_sent.append(len(data))
+
+                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+                
+                # then send a FIN
+                src_port: int = 5555
+                dst_port: int = packet[UDP].sport
+                seq_num: int = rec_ack_num
+                ack_num: int = rec_seq_num + 1
+                flags: int = 16    # 00010000 (sets only ACK bit)
+                data: bytes = b""
+                window: int = 0
+
+                fin_nums_sent.append(seq_num)
+                data_sizes_sent.append(len(data))
+
+                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
     
     return
 
