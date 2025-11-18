@@ -11,7 +11,9 @@ ACK    = 00010000
 SYNACK = 00010010
 """
 
-# Globals
+"""
+Globals
+"""
 # keeps track of the sequence numbers we have sent
 sequence_nums_sent[]
 # keeps track of the fin-related sequence numbers we have sent
@@ -42,17 +44,33 @@ def set_data_packet_parameters(packet):
 
     build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
 
+"""
+This function parses the TCP header within the data section
+of received UDP packets. It will decide how to set the header of the response packet
+based on the fields of the received packet
+
+TODO:
+* finish connection teardown logic
+* figure out what data to send in packets
+* figure out how to start connection (two different programs?)
+"""
 def parse_packet(packet):
     raw_layer: bytes = packet.getlayer(Raw)
     if raw_layer:
-        # data is bytes
-        rec_data: bytes = raw_layer.load
         # rec_data is an array of bytes, not bits (so we index based on bytes)
+        rec_data: bytes = raw_layer.load
         rec_flags: int = int.from_bytes(rec_data[10], byteorder='big')
         rec_seq_num: int = int.from_bytes(rec_data[0:4], byteorder='big')
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
 
-        if rec_flags == 2: # SYN set
+        # print received packet
+        print("Received Packet:")
+        print("Flags: " + rec_flags)
+        print("Seq Num: " + rec_seq_num)
+        print("Ack Num: " + rec_ack_num)
+
+        # SYN set
+        if rec_flags == 2:
             # we want to send back to the source port that sent to us
             src_port: int = 5555
             dst_port: int = packet[UDP].sport
@@ -67,7 +85,8 @@ def parse_packet(packet):
 
             build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
 
-        elif rec_flags == 18: # SYN and ACK set
+        # SYN and ACK set
+        elif rec_flags == 18:
             src_port: int = 5555
             dst_port: int = packet[UDP].sport
             seq_num: int = 0
@@ -81,7 +100,8 @@ def parse_packet(packet):
 
             build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
 
-        elif rec_flags == 16: # ACK set
+        # ACK set
+        elif rec_flags == 16:
             if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
                 # handshake complete, start sending data
                 set_data_packet_parameters(packet)
@@ -97,7 +117,9 @@ def parse_packet(packet):
                 else:
                     # error sending data . . . resend
                     send_packet(sent_packets[len(send_packets) - 1])
-        elif rec_flags == 1: #fin
+
+        # FIN set
+        elif rec_flags == 1:
             # check if this is a response to a FIN
             if rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
                 # what do we do if we did not receive ack before this?
@@ -195,10 +217,10 @@ print(mess)
 
 
 
-'''
+"""
 This function will take the packet built by build_packet() and
 simply use the send() function to send it to its destination
-'''
+"""
 def send_packet(packet):
     send(packet)
     return
@@ -215,4 +237,15 @@ def handle_error(missing_packets):
         pass
     
     return
+
+"""
+This function will start the TCP connection by sending a SYN segment
+"""
+def main():
+    # start by sending a SYN packet
+    # only want one side to send this though (?)
+
+if __name__ == "__main__":
+    main()
+
 
