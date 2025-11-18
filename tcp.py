@@ -1,4 +1,5 @@
 from scapy.all import *
+import threading
 
 """
 FLAGS FORMAT:
@@ -22,6 +23,8 @@ fin_nums_sent[]
 data_sizes_sent[]
 # keeps track of the packets we have sent
 packets_sent[]
+# list of data to put in packets
+data_to_send[]
 
 def sniff():
     # using port 5555 for no reason in particular
@@ -53,6 +56,7 @@ TODO:
 * finish connection teardown logic
 * figure out what data to send in packets
 * figure out how to start connection (two different programs?)
+* add call to handle_error when sequence numbers are out of order
 """
 def parse_packet(packet):
     raw_layer: bytes = packet.getlayer(Raw)
@@ -240,10 +244,19 @@ def handle_error(missing_packets):
 
 """
 This function will start the TCP connection by sending a SYN segment
+
+Notes:
+* start by sending a SYN packet
+* only want one side to send this though(?)
 """
 def main():
-    # start by sending a SYN packet
-    # only want one side to send this though (?)
+    # populate the array of data
+    for i in range(1, 50):
+        data_to_send.append(f"data packet {i}")
+
+    # send a SYN packet
+    
+
 
 if __name__ == "__main__":
     main()
