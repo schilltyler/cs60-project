@@ -1,4 +1,5 @@
 from scapy.all import *
+from scapy.layers.inet import UDP
 
 """
 FLAGS FORMAT:
@@ -15,13 +16,15 @@ SYNACK = 00010010
 Globals
 """
 # keeps track of the sequence numbers we have sent
-sequence_nums_sent[]
+sequence_nums_sent = []
 # keeps track of the fin-related sequence numbers we have sent
-fin_nums_sent[]
+fin_nums_sent = []
 # keeps track of sizes of the data we have sent
-data_sizes_sent[]
+data_sizes_sent = []
 # keeps track of the packets we have sent
-packets_sent[]
+packets_sent = []
+
+
 
 def sniff():
     # using port 5555 for no reason in particular
@@ -110,13 +113,14 @@ def parse_packet(packet):
             elif rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
                 # want to see if we are ready to receive a FIN from other side
                 # or if we have more data to send
+                pass
 
             else:
                 if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
                     set_data_packet_parameters(packet)
                 else:
                     # error sending data . . . resend
-                    send_packet(sent_packets[len(send_packets) - 1])
+                    send_packet(packets_sent[len(packets_sent) - 1])
 
         # FIN set
         elif rec_flags == 1:
@@ -136,7 +140,7 @@ def parse_packet(packet):
 
                 build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
             # or the first fin in the teardown sequence
-            else
+            else:
                 # first send an ACK
                 src_port: int = 5555
                 dst_port: int = packet[UDP].sport
@@ -166,6 +170,9 @@ def parse_packet(packet):
                 build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
     
     return
+
+
+
 
 
 def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
@@ -244,6 +251,7 @@ This function will start the TCP connection by sending a SYN segment
 def main():
     # start by sending a SYN packet
     # only want one side to send this though (?)
+    return
 
 if __name__ == "__main__":
     main()
