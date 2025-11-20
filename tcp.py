@@ -179,52 +179,21 @@ def parse_packet(packet):
 
 
 def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
-    """
-    This function builds a TCP packet with the given parameters.
+    header_and_data: bytes = b"".join(
+        (
+            sequence_num.to_bytes(4, 'big'),
+            ack_num.to_bytes(4, 'big'),
+            flags.to_bytes(1, 'big'),
+            window.to_bytes(2, 'big'),
+            data.to_bytes(len(data), 'big')
+        )
+    )
 
-    Arguments:
-        sport,          Integer: source port
-        dport,          Integer: destination port
-        ack_num,        Integer: acknowledgment number
-        sequence_num,   Integer: sequence number
+    packet = IP(dst='') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
 
-        flags,          String: 8-bit string representing TCP flags
+    send_packet(packet)
 
-        data, :
-
-        window, :
-    """
-    # String to store the binary representation of the packet
-    message = ""
-
-    # Build the TCP header
-    message += format(sport, '016b')
-    message += format(dport, '016b')
-    message += format(sequence_num, '032b')
-    message += format(ack_num, '032b')
-
-
-    message += "0101"               # 4 bits        Offset (in 4byte words) to start of data section (Min:5 Max:15)
-    message += "0000"               # 4 bits        These must be set to 0
-
-    message += flags
-
-    message += "\nwindow bits"      # 2 bytes
-
-    message += "\nChecksum"         # 2 bytes
-
-    message += "\nurgent pointer"   # 2 bytes
-
-    # Options TOREPLACE (if using this then need to change data offset and check how long this is)
-
-    # Data TOREPLACE - NEED to see how packet size is determined and how to split data between packets
-
-    return message
-
-mess = build_packet(1234, 5678, 0, 0, '00010000', "Hello, World!", 1024)
-print(mess)
-
-
+    return
 
 
 """
@@ -234,8 +203,6 @@ simply use the send() function to send it to its destination
 def send_packet(packet):
     send(packet)
     return
-
-
 
 
 """
@@ -260,7 +227,26 @@ def main():
     for i in range(1, 50):
         data_to_send.append(f"data packet {i}")
 
+    # create thread
+    sniff_thread = Thread(target=sniff, args())
+    
+    sniff_thread.start()
+
     # send a SYN packet
+    src_port: int = 5555
+    dst_port: int = 5555
+    seq_num: int = 0
+    ack_num: int = 0
+    flags: int = 2    # 00010000 (sets only SYN bit)
+    data: bytes = b""
+    window: int = 0
+
+    sequence_nums_sent.append(seq_num)
+    data_sizes_sent.append(len(data))
+
+    build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+
+    thread.join()
     
     return
 
