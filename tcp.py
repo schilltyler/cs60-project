@@ -69,21 +69,19 @@ def verify_checksum(data):
     # calculate checksum
     # had help from Chatgpt.com to formulate some of this code
     if len(data) % 2 == 1:
-        header_and_data += b'\x00' # pad with zero byte to get even length
-
-    two_byte_chunks = []
-    for i in range(0, len(data), 2): # every two bytes
-        two_byte_chunks.append(data[i:i+2])
+        dat
 
     checksum: int = 0
-    for i in range(0, len(two_byte_chunks)):
-        checksum += two_byte_chunks[i]
+    for i in range(0, len(data), 2):
+        # do the left shift to put first byte in upper bits (big-endian)
+        two_byte_chunk: int = (data[i] << 8) + data[i + 1]
+        checksum += two_byte_chunk
 
     while checksum > 0xFFFF:
         checksum = (checksum & 0xFFFF) + (checksum >> 16)
 
     # invert all of the bits (~ operator)
-    checksum = ~sum & 0xFFFF
+    checksum = ~checksum & 0xFFFF
 
     if checksum == 0xFFFF:
         return 0 # success
@@ -118,47 +116,46 @@ def build_packet(sport, dport, sequence_num, ack_num, data_offset, flags, data, 
         (
             sequence_num.to_bytes(4, 'big'),
             ack_num.to_bytes(4, 'big'),
-            data_offset.to_bytes(1, 'big')
+            data_offset.to_bytes(1, 'big'),
             flags.to_bytes(1, 'big'),
             window.to_bytes(2, 'big'),
-            checksum.to_bytes(2, 'big'),
-            data.to_bytes(len(data), 'big')
+            checksum.to_bytes(2, 'big'), # checksum will start as 0
+            data
         )
     )
 
     # calculate checksum
-    # had help from Chatgpt.com to formulate some of this code
+    # had help from Chatgpt.com to formulate some of this code and debug
     if len(header_and_data) % 2 == 1:
-        header_and_data += b'\x00' # pad with zero byte to get even length
-
-    two_byte_chunks = []
-    for i in range(0, len(header_and_data), 2): # every two bytes
-        two_byte_chunks.append(header_and_data[i:i+2])
+        header_and_data += b'\x00' # pad with zero byte to get even length      
 
     checksum: int = 0
-    for i in range(0, len(two_byte_chunks)):
-        checksum += two_byte_chunks[i]
+    for i in range(0, len(header_and_data), 2):
+        # do the left shift to put first byte in upper bits (big-endian)
+        two_byte_chunk: int = (header_and_data[i] << 8) + header_and_data[i + 1]
+        checksum += two_byte_chunk
 
     while checksum > 0xFFFF:
         checksum = (checksum & 0xFFFF) + (checksum >> 16)
 
     # invert all of the bits (~ operator)
-    checksum = ~sum & 0xFFFF
+    checksum = ~checksum & 0xFFFF
 
     # reassemble bytes object now including checksum
     header_and_data = b"".join(
         (
             sequence_num.to_bytes(4, 'big'),
             ack_num.to_bytes(4, 'big'),
-            data_offset.to_bytes(1, 'big')
+            data_offset.to_bytes(1, 'big'),
             flags.to_bytes(1, 'big'),
             window.to_bytes(2, 'big'),
-            checksum.to_bytes(2, 'big')
-            data.to_bytes(len(data), 'big')
+            checksum.to_bytes(2, 'big'),
+            data
         )
     )
 
-    packet = IP(dst='') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
+    # 127.0.0.1 is placeholder
+    packet = IP(dst='127.0.0.1') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
 
     send_packet(packet)
 
