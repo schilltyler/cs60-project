@@ -26,28 +26,143 @@ data_sizes_sent = []
 packets_sent = []
 # list of data to put in packets
 data_to_send = []
+# the sequence number of the last acknowledged packet
+#last_acked_packet
 
 
+"""
+This function sniffs network traffic to find the packets
+transmitted to us
+"""
 def sniff():
     # using port 5555 for no reason in particular
     # was trying to find a port that is not dedicated to a service already
     # that way we do not get traffic other than our own on it
     sniff(iface="wlp0s20f3", filter="dst port 5555", prn=parse_packet, store=False)
 
+"""
+This function sets the parameters for data packet
+"""
 def set_data_packet_parameters(packet):
     src_port: int = 5555
     dst_port: int = packet[UDP].sport
     seq_num: int = 0
     ack_num: int = 1
+    data_offset: int = 3 # 3 * 4 bytes (12 byte header)
     flags: int = 0 # data transfer mode, no flags needed
     data: bytes = b""
     window: int = 0
+    checksum: int = 0
 
     # add to our tracking lists
     sequence_nums_sent.append(seq_num)
     data_sizes_sent.append(len(data))
 
     build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+
+
+"""
+This function will compute the checksum on the received TCP
+header to make sure it is valid
+"""
+def verify_checksum(data):
+    # calculate checksum
+    # had help from Chatgpt.com to formulate some of this code
+    if len(data) % 2 == 1:
+        header_and_data += b'\x00' # pad with zero byte to get even length
+
+    two_byte_chunks = []
+    for i in range(0, len(data), 2): # every two bytes
+        two_byte_chunks.append(data[i:i+2])
+
+    checksum: int = 0
+    for i in range(0, len(two_byte_chunks)):
+        checksum += two_byte_chunks[i]
+
+    while checksum > 0xFFFF:
+        checksum = (checksum & 0xFFFF) + (checksum >> 16)
+
+    # invert all of the bits (~ operator)
+    checksum = ~sum & 0xFFFF
+
+    if checksum == 0xFFFF:
+        return 0 # success
+    else:
+        return 1 # invalid checksum
+
+"""
+    missing_packets: list of sequence numbers that were not received
+"""
+def handle_error(missing_packets):
+
+    for i in missing_packets:
+        pass
+
+    return
+
+
+"""
+This function will take the packet built by build_packet() and
+simply use the send() function to send it to its destination
+"""
+def send_packet(packet):
+    send(packet)
+    return
+
+"""
+This function takes tcp header parameters (as well as two UDP parameters) and
+creates a packet that can be sent using Scapy's framework
+"""
+def build_packet(sport, dport, sequence_num, ack_num, data_offset, flags, data, window, checksum):
+    header_and_data: bytes = b"".join(
+        (
+            sequence_num.to_bytes(4, 'big'),
+            ack_num.to_bytes(4, 'big'),
+            data_offset.to_bytes(1, 'big')
+            flags.to_bytes(1, 'big'),
+            window.to_bytes(2, 'big'),
+            checksum.to_bytes(2, 'big'),
+            data.to_bytes(len(data), 'big')
+        )
+    )
+
+    # calculate checksum
+    # had help from Chatgpt.com to formulate some of this code
+    if len(header_and_data) % 2 == 1:
+        header_and_data += b'\x00' # pad with zero byte to get even length
+
+    two_byte_chunks = []
+    for i in range(0, len(header_and_data), 2): # every two bytes
+        two_byte_chunks.append(header_and_data[i:i+2])
+
+    checksum: int = 0
+    for i in range(0, len(two_byte_chunks)):
+        checksum += two_byte_chunks[i]
+
+    while checksum > 0xFFFF:
+        checksum = (checksum & 0xFFFF) + (checksum >> 16)
+
+    # invert all of the bits (~ operator)
+    checksum = ~sum & 0xFFFF
+
+    # reassemble bytes object now including checksum
+    header_and_data = b"".join(
+        (
+            sequence_num.to_bytes(4, 'big'),
+            ack_num.to_bytes(4, 'big'),
+            data_offset.to_bytes(1, 'big')
+            flags.to_bytes(1, 'big'),
+            window.to_bytes(2, 'big'),
+            checksum.to_bytes(2, 'big')
+            data.to_bytes(len(data), 'big')
+        )
+    )
+
+    packet = IP(dst='') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
+
+    send_packet(packet)
+
+    return
 
 """
 This function parses the TCP header within the data section
@@ -62,7 +177,16 @@ TODO:
 """
 def parse_packet(packet):
     raw_layer: bytes = packet.getlayer(Raw)
+
     if raw_layer:
+        # verify checksum
+        result: int = verify_checksum(raw_layer)
+        if result == 0:
+            pass
+        else:
+            # invalid checksum, don't do any logic
+            return
+
         # rec_data is an array of bytes, not bits (so we index based on bytes)
         rec_data: bytes = raw_layer.load
         rec_flags: int = int.from_bytes(rec_data[10], byteorder='big')
@@ -82,9 +206,11 @@ def parse_packet(packet):
             dst_port: int = packet[UDP].sport
             seq_num: int = 1
             ack_num: int = rec_seq_num + 1
+            data_offset: int = 3
             flags: int = 18     # 00010010 (sets the ACK and SYN bits)
             data: bytes = b""
             window: int = 0 # 0 for now until we figure out if we need it
+            checksum: int = 0
 
             sequence_nums_sent.append(seq_num)
             data_sizes_sent.append(len(data))
@@ -97,9 +223,11 @@ def parse_packet(packet):
             dst_port: int = packet[UDP].sport
             seq_num: int = 0
             ack_num: int = rec_seq_num + 1
+            data_offset: int = 3
             flags: int = 16    # 00010000 (sets only ACK bit)
             data: bytes = b""
             window: int = 0
+            checksum: int = 0
 
             sequence_nums_sent.append(seq_num)
             data_sizes_sent.append(len(data))
@@ -134,9 +262,11 @@ def parse_packet(packet):
                 dst_port: int = packet[UDP].sport
                 seq_num: int = 0 # doesn't matter what this is
                 ack_num: int = rec_seq_num + 1
+                data_offset: int = 3
                 flags: int = 16    # 00010000 (sets only ACK bit)
                 data: bytes = b""
                 window: int = 0
+                checksum: int = 0
 
                 sequence_nums_sent.append(seq_num)
                 data_sizes_sent.append(len(data))
@@ -149,9 +279,11 @@ def parse_packet(packet):
                 dst_port: int = packet[UDP].sport
                 seq_num: int = 0 # doesn't matter what this is
                 ack_num: int = rec_seq_num + 1
+                data_offset: int = 3
                 flags: int = 16    # 00010000 (sets only ACK bit)
                 data: bytes = b""
                 window: int = 0
+                checksum: int = 0
 
                 sequence_nums_sent.append(seq_num)
                 data_sizes_sent.append(len(data))
@@ -163,9 +295,11 @@ def parse_packet(packet):
                 dst_port: int = packet[UDP].sport
                 seq_num: int = rec_ack_num
                 ack_num: int = rec_seq_num + 1
+                data_offset: int = 3
                 flags: int = 16    # 00010000 (sets only ACK bit)
                 data: bytes = b""
                 window: int = 0
+                checksum: int = 0
 
                 fin_nums_sent.append(seq_num)
                 data_sizes_sent.append(len(data))
@@ -175,46 +309,6 @@ def parse_packet(packet):
     return
 
 
-
-
-
-def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
-    header_and_data: bytes = b"".join(
-        (
-            sequence_num.to_bytes(4, 'big'),
-            ack_num.to_bytes(4, 'big'),
-            flags.to_bytes(1, 'big'),
-            window.to_bytes(2, 'big'),
-            data.to_bytes(len(data), 'big')
-        )
-    )
-
-    packet = IP(dst='') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
-
-    send_packet(packet)
-
-    return
-
-
-"""
-This function will take the packet built by build_packet() and
-simply use the send() function to send it to its destination
-"""
-def send_packet(packet):
-    send(packet)
-    return
-
-
-"""
-    missing_packets: list of sequence numbers that were not received
-"""
-def handle_error(missing_packets):
-    
-    for i in missing_packets:
-        pass
-    
-    return
-
 """
 This function will start the TCP connection by sending a SYN segment
 
@@ -223,7 +317,7 @@ Notes:
 * only want one side to send this though(?)
 """
 def main():
-    # populate the array of data
+    # popualate the array of data
     for i in range(1, 50):
         data_to_send.append(f"data packet {i}")
 
