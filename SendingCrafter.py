@@ -1,6 +1,7 @@
 from scapy.all import *
 import threading
-from scapy.layers.inet import Ether, IP, UDP, raw
+from scapy.layers.inet import IP, UDP
+import math
 
 """
 FLAGS FORMAT:
@@ -14,20 +15,6 @@ SYNACK = 00010010
 """
 
 
-"""
-Globals
-"""
-# keeps track of the sequence numbers we have sent
-sequence_nums_sent = []
-# keeps track of the fin-related sequence numbers we have sent
-fin_nums_sent = []
-# keeps track of sizes of the data we have sent
-data_sizes_sent = []
-# keeps track of the packets we have sent
-packets_sent = []
-# list of data to put in packets
-data_to_send = []
-
 
 """
 Need to set a standard packet size to split data into multiple packets if needed
@@ -36,7 +23,7 @@ PACKET_SIZE = 512
 
 
 
-class Crafter():
+class SendingCrafter():
 
     def __init__(self, iface, src_port):
         self.iface = iface
@@ -97,19 +84,20 @@ class Crafter():
 
         message += format(0, '016b')    # 2 bytes       Window Bits  - Need to figure this part out
 
-        pkt = ip_layer / udp_layer / Raw(load=message)
+        
+        # Convert the bit string to actual bytes
+        mint = int(message, 2)
+        nbs = len(message) // 8
+        payload = mint.to_bytes(nbs, byteorder='big')
 
+        # Create packet by stacking layers
+        pkt = ip_layer / udp_layer / Raw(payload)
 
-        # send(pkt)
+        # Return the created packet
         return pkt
 
 
 
-# c = Crafter("wo0", "5555")
-# c.set_dest("127.0.0.1", "1234")
-# pkt = c.build_packet(1, 2, 2, 0, 0)
-
-# pkt.show()
 
 
 # def set_data_packet_parameters(packet):

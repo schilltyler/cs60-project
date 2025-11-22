@@ -2,7 +2,7 @@ from scapy.all import *
 import threading
 from scapy.layers.inet import Ether, IP, UDP, raw
 
-from packetCrafting import Crafter
+from SendingCrafter import SendingCrafter
 
 
 conf.use_pcap = True
@@ -37,12 +37,6 @@ data_to_send = []
 
 # Need to set a standard packet size to split data into multiple packets if needed
 PACKET_SIZE = 512
-
-# Global variables for destination ip and port
-# DST_IP = ""
-# dst_port = 0
-# SRC = 5555
-
 
 
 
@@ -85,11 +79,14 @@ def parse_packet(packet, crafter):
         print(rec_data)
 
         # Single byte does not need conversion (it is already an int)
-        rec_flags: int = rec_data[10]
+        rec_flags: int = rec_data[9]
 
         # Convert 4 byte slices to integers
         rec_seq_num: int = int.from_bytes(rec_data[0:4], byteorder='big')
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
+
+        for i in rec_data:
+            print(i)
 
         # print received packet
         print("\nReceived Packet:")
@@ -97,15 +94,13 @@ def parse_packet(packet, crafter):
         print("Seq Num: ", rec_seq_num)
         print("Ack Num: " , rec_ack_num)
 
-        # SRC = 5555
-        # dst_port = packet[UDP].sport
-        # dstip = packet[IP].src
         ACK_NUM = rec_seq_num + 1
         E_DATA = b""
 
 
         # SYN set - This is a new connection
         if rec_flags == 2:
+            print("\nGOT SYN\n\n")
             # Get the port and ip from the new connection initiator
             dst_port = packet[UDP].sport
             dst_ip = packet[IP].src
@@ -113,10 +108,12 @@ def parse_packet(packet, crafter):
             # Edit crafting object to set destination ip and port
             crafter.set_dest(dst_ip, dst_port)
 
+            print(crafter.get_dst_port())
+
             # Not sure what to do about window yet, 0 until figure it out
             # 18 as flags sets both SYN and ACK bits
             pkt = crafter.build_packet(sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
-            # send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
+            send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
 
 
         # SYN and ACK set
@@ -181,12 +178,23 @@ def parse_packet(packet, crafter):
 
 
 
+
+
+
+
+
+
+"""
+    Function to send packets and log key info about the for future use
+"""
 def send_and_log_packet(packet, l1, slog, dlog):
 
     l1.append(slog)
     data_sizes_sent.append(dlog)
 
     send(packet)
+
+
 
 
 
@@ -199,7 +207,6 @@ def handle_error(missing_packets):
         pass
     
     return
-
 
 
 
@@ -220,7 +227,7 @@ def main():
     our_port = "5555"
 
     # Build crafting object with our port specified
-    crafter = Crafter(our_interface, our_port)
+    crafter = SendingCrafter(our_interface, our_port)
 
     # Call sniffing function in a separate thread
     sniff_thread = threading.Thread(target=start_sniffer, args=(crafter,))
@@ -253,6 +260,8 @@ def main():
 
     
     return
+
+
 
 
 if __name__ == "__main__":
