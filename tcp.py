@@ -1,8 +1,11 @@
 from scapy.all import *
 import threading
-from scapy.layers.inet import Ether, IP, UDP, Raw, send
+from scapy.layers.inet import Ether, IP, UDP, raw
 
 from packetCrafting import build_packet, set_data_packet_parameters
+
+
+conf.use_pcap = True
 
 """
 FLAGS FORMAT:
@@ -31,19 +34,28 @@ packets_sent = []
 data_to_send = []
 
 
-"""
-Need to set a standard packet size to split data into multiple packets if needed
-"""
+
+# Need to set a standard packet size to split data into multiple packets if needed
 PACKET_SIZE = 512
 
+# Global variables for destination ip and port
+DST_IP = ""
+dst_port = 0
+SRC = 5555
 
 
 
-def sniff():
+
+def start_sniffer():
     # using port 5555 for no reason in particular
     # was trying to find a port that is not dedicated to a service already
     # that way we do not get traffic other than our own on it
-    sniff(iface="wlp0s20f3", filter="dst port 5555", prn=parse_packet, store=False)
+    sniff(
+        iface="lo0",
+        filter="udp and dst port 5555",
+        prn=parse_packet,
+        store=False
+    )
 
 
 
@@ -62,45 +74,48 @@ TODO:
 """
 def parse_packet(packet):
 
-    raw_layer: bytes = packet.getlayer(Raw)
+    print("Packet received\n\n")
+
+    # Get the raw layer object
+    raw_layer = packet.getlayer(Raw)
+
+    # If the raw layer exists, parse the TCP header fields
     if raw_layer:
         # rec_data is an array of bytes, not bits (so we index based on bytes)
         rec_data: bytes = raw_layer.load
-        rec_flags: int = int.from_bytes(rec_data[10], byteorder='big')
+
+        # Single byte does not need conversion (it is already an int)
+        rec_flags: int = rec_data[10]
+
+        # Convert 4 byte slices to integers
         rec_seq_num: int = int.from_bytes(rec_data[0:4], byteorder='big')
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
 
         # print received packet
         print("Received Packet:")
-        print("Flags: " + rec_flags)
-        print("Seq Num: " + rec_seq_num)
-        print("Ack Num: " + rec_ack_num)
+        print("Flags: ", rec_flags)
+        print("Seq Num: ", rec_seq_num)
+        print("Ack Num: " , rec_ack_num)
 
-        SRC = 5555
-        DST = packet[UDP].sport
+        # SRC = 5555
+        dst_port = packet[UDP].sport
         ACK_NUM = rec_seq_num + 1
         E_DATA = b""
 
         # SYN set
         if rec_flags == 2:
-
-            sequence_nums_sent.append(1)
-            data_sizes_sent.append(0)
-
             # Not sure what to do about window yet, 0 until figure it out
             # 18 as flags sets both SYN and ACK bits
+            pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
+            send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
 
-            build_packet(SRC, DST, sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
 
         # SYN and ACK set
         elif rec_flags == 18:
-
-            sequence_nums_sent.append(0)
-            data_sizes_sent.append(0)
-
             # 16 as flags sets ACK bit
+            pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+            send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
 
-            build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
 
         # ACK set
         elif rec_flags == 16:
@@ -130,37 +145,37 @@ def parse_packet(packet):
             if rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
                 # what do we do if we did not receive ack before this?
 
-                sequence_nums_sent.append(0)
-                data_sizes_sent.append(0)
-
                 # 16 as flags sets ACK bit
+                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
+            
 
-                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
             # or the first fin in the teardown sequence
             else:
                 # first send an ACK
 
-                sequence_nums_sent.append(0)
-                data_sizes_sent.append(0)
-
                 # Sequence number doesn't matter here
                 # 16 as flags sets ACK bit
-
-                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
 
                 
                 # then send a FIN
 
-                fin_nums_sent.append(rec_ack_num)
-                data_sizes_sent.append(0)
-
                 # 16 as flags sets ACK bit
-
-                build_packet(SRC, DST, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                send_and_log_packet(pkt, fin_nums_sent, rec_ack_num, 0)
     
     return
 
 
+
+def send_and_log_packet(packet, l1, slog, dlog):
+
+    l1.append(slog)
+    data_sizes_sent.append(dlog)
+
+    send(packet)
 
 
 
@@ -187,22 +202,22 @@ Notes:
 * only want one side to send this though(?)
 """
 def main():
-    
-    # Need MAC and IP addresses from received packet to build response packets
-    # Also need a wat to initiate the connection from one side
+    # Call sniffing function in a separate thread
+    sniff_thread = threading.Thread(target=start_sniffer)
+    sniff_thread.start()
 
-    # Start listening
-
-    ipad = input("Enter destination ip address: ")
 
     # Need to have the option to either continuously listen for syn or send a syn
     choice = input("Enter 'i' to initiate connection or 'l' to listen: ")
 
+
     # If initiating connection, send SYN packet
     if choice == 'i':
-        ipad = input("Enter destination ip address: ")
+        DST_IP = input("Enter destination ip address: ")
+        dst_port = input("Enter destination port: ")
 
-        # Send syn
+        pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=0, flags=2, data=b"", window=0)
+        send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
 
 
 
@@ -227,15 +242,13 @@ def main():
 
 
 
-    # populate the array of data
-    for i in range(1, 50):
-        data_to_send.append(f"data packet {i}")
+    # # populate the array of data
+    # for i in range(1, 50):
+    #     data_to_send.append(f"data packet {i}")
 
     # send a SYN packet
 
-    # Call sniffing function in a separate thread
-    sniff_thread = threading.Thread(target=sniff)
-    sniff_thread.start()
+    
 
     
     

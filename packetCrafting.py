@@ -1,6 +1,6 @@
 from scapy.all import *
 import threading
-from scapy.layers.inet import Ether, IP, UDP, Raw, send
+from scapy.layers.inet import Ether, IP, UDP, raw
 
 """
 FLAGS FORMAT:
@@ -64,7 +64,7 @@ def set_data_packet_parameters(packet):
 
 
 
-def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
+def build_packet(sport, dport, dip, sequence_num, ack_num, flags, data, window):
     """
     This function builds a TCP packet with the given parameters.
 
@@ -81,7 +81,7 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
         window, :
     """
     # IP layer to indicate destination IP address
-    ip_layer = IP(dst="127.0.0.1")
+    ip_layer = IP(dst=dip)
     # UDP layer to indicate source and destination ports
     udp_layer = UDP(sport=sport, dport=dport)
 
@@ -103,7 +103,8 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
     pkt = ip_layer / udp_layer / Raw(load=message)
 
 
-    send(pkt)
+    # send(pkt)
+    return pkt
 
 
     # # Need logic to calculate checksum
@@ -116,7 +117,7 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
     # return message
 
-build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
+# build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
 
 
 
