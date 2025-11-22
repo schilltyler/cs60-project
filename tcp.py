@@ -131,7 +131,8 @@ def parse_packet(packet, crafter):
 
             # handshake complete, start sending data
             if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
-                set_data_packet_parameters(packet)
+                # set_data_packet_parameters(packet)
+                pass
 
             # check if is an ACK to a FIN
             elif rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
@@ -143,7 +144,8 @@ def parse_packet(packet, crafter):
             else:
                 # 
                 if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
-                    set_data_packet_parameters(packet)
+                    # set_data_packet_parameters(packet)
+                    pass
                 else:
                     # error sending data . . . resend
                     send(packets_sent[len(packets_sent) - 1])
