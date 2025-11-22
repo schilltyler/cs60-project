@@ -2,7 +2,7 @@ from scapy.all import *
 import threading
 from scapy.layers.inet import Ether, IP, UDP, raw
 
-from packetCrafting import build_packet, set_data_packet_parameters
+from packetCrafting import Crafter
 
 
 conf.use_pcap = True
@@ -39,21 +39,19 @@ data_to_send = []
 PACKET_SIZE = 512
 
 # Global variables for destination ip and port
-DST_IP = ""
-dst_port = 0
-SRC = 5555
+# DST_IP = ""
+# dst_port = 0
+# SRC = 5555
 
 
 
 
-def start_sniffer():
-    # using port 5555 for no reason in particular
-    # was trying to find a port that is not dedicated to a service already
-    # that way we do not get traffic other than our own on it
+def start_sniffer(crafter):
+    # Start the sniffer with the crafter passed in
     sniff(
-        iface="lo0",
-        filter="udp and dst port 5555",
-        prn=parse_packet,
+        iface=crafter.get_iface(),
+        filter="udp and dst port " + str(crafter.get_src_port()),
+        prn=lambda pkt: parse_packet(pkt, crafter),
         store=False
     )
 
@@ -72,7 +70,7 @@ TODO:
 * figure out how to start connection (two different programs?)
 * add call to handle_error when sequence numbers are out of order
 """
-def parse_packet(packet):
+def parse_packet(packet, crafter):
 
     print("Packet received\n\n")
 
@@ -84,6 +82,8 @@ def parse_packet(packet):
         # rec_data is an array of bytes, not bits (so we index based on bytes)
         rec_data: bytes = raw_layer.load
 
+        print(rec_data)
+
         # Single byte does not need conversion (it is already an int)
         rec_flags: int = rec_data[10]
 
@@ -92,28 +92,37 @@ def parse_packet(packet):
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
 
         # print received packet
-        print("Received Packet:")
+        print("\nReceived Packet:")
         print("Flags: ", rec_flags)
         print("Seq Num: ", rec_seq_num)
         print("Ack Num: " , rec_ack_num)
 
         # SRC = 5555
-        dst_port = packet[UDP].sport
+        # dst_port = packet[UDP].sport
+        # dstip = packet[IP].src
         ACK_NUM = rec_seq_num + 1
         E_DATA = b""
 
-        # SYN set
+
+        # SYN set - This is a new connection
         if rec_flags == 2:
+            # Get the port and ip from the new connection initiator
+            dst_port = packet[UDP].sport
+            dst_ip = packet[IP].src
+
+            # Edit crafting object to set destination ip and port
+            crafter.set_dest(dst_ip, dst_port)
+
             # Not sure what to do about window yet, 0 until figure it out
             # 18 as flags sets both SYN and ACK bits
-            pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
-            send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
+            pkt = crafter.build_packet(sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
+            # send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
 
 
         # SYN and ACK set
         elif rec_flags == 18:
             # 16 as flags sets ACK bit
-            pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+            pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
             send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
 
 
@@ -146,7 +155,7 @@ def parse_packet(packet):
                 # what do we do if we did not receive ack before this?
 
                 # 16 as flags sets ACK bit
-                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
                 send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
             
 
@@ -156,14 +165,14 @@ def parse_packet(packet):
 
                 # Sequence number doesn't matter here
                 # 16 as flags sets ACK bit
-                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
                 send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
 
                 
                 # then send a FIN
 
                 # 16 as flags sets ACK bit
-                pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
+                pkt = crafter.build_packet(sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
                 send_and_log_packet(pkt, fin_nums_sent, rec_ack_num, 0)
     
     return
@@ -202,8 +211,17 @@ Notes:
 * only want one side to send this though(?)
 """
 def main():
+
+    # our_interface = input("Enter the interface to sniff on: ")
+    # our_port = input("Enter the port to sniff on: ")
+    our_interface = "lo0"
+    our_port = "5555"
+
+    # Build crafting object with our port specified
+    crafter = Crafter(our_interface, our_port)
+
     # Call sniffing function in a separate thread
-    sniff_thread = threading.Thread(target=start_sniffer)
+    sniff_thread = threading.Thread(target=start_sniffer, args=(crafter,))
     sniff_thread.start()
 
 
@@ -213,32 +231,14 @@ def main():
 
     # If initiating connection, send SYN packet
     if choice == 'i':
-        DST_IP = input("Enter destination ip address: ")
+        dst_ip = input("Enter destination ip address: ")
         dst_port = input("Enter destination port: ")
 
-        pkt = build_packet(SRC, dst_port, DST_IP, sequence_num=0, ack_num=0, flags=2, data=b"", window=0)
+        # Edit crafting object to set destination ip and port
+        crafter.set_dest(dst_ip, dst_port)
+
+        pkt = crafter.build_packet(sequence_num=0, ack_num=0, flags=2, data=b"", window=0)
         send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
-
-
-
-
-    # Start listening in the background anyway on a separate thread
-    # On this thread handle user input to send data packets when needed
-    # Need to have initiator mode and listener mode
-    # Initiator mode sends SYN packets until connection is established
-    # Listener mode just listens for SYN packets and responds accordingly
-    # No
-    # Large part of this is that you can send and receieve at the same time
-    # Who starts the connection then?????
-    # Connection only starts when one side is prompted to send something
-    # In our continuous listening thread we can have a user input prompt to start the connection
-    # How to do this??
-
-    # # Set ip address of target here
-    # ipad = "127.0.0.1"
-
-    # Sending data in the parser function so need to pass addresses there
-
 
 
 
@@ -246,19 +246,12 @@ def main():
     # for i in range(1, 50):
     #     data_to_send.append(f"data packet {i}")
 
-    # send a SYN packet
-
-    
-
-    
-    
     # Send data packets here
-    # Can be 
+    # Can be
 
     
     return
 
+
 if __name__ == "__main__":
     main()
-
-
