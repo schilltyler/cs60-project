@@ -79,6 +79,7 @@ def parse_packet(packet):
         SRC = 5555
         DST = packet[UDP].sport
         ACK_NUM = rec_seq_num + 1
+        E_DATA = b""
 
         # SYN set
         if rec_flags == 2:
@@ -89,7 +90,7 @@ def parse_packet(packet):
             # Not sure what to do about window yet, 0 until figure it out
             # 18 as flags sets both SYN and ACK bits
 
-            build_packet(SRC, DST, sequence_num=1, ack_num=ACK_NUM, flags=18, data=b"", window=0)
+            build_packet(SRC, DST, sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
 
         # SYN and ACK set
         elif rec_flags == 18:
@@ -99,12 +100,13 @@ def parse_packet(packet):
 
             # 16 as flags sets ACK bit
 
-            build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
+            build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
 
         # ACK set
         elif rec_flags == 16:
+
+            # handshake complete, start sending data
             if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
-                # handshake complete, start sending data
                 set_data_packet_parameters(packet)
 
             # check if is an ACK to a FIN
@@ -113,7 +115,9 @@ def parse_packet(packet):
                 # or if we have more data to send
                 pass
 
+            # ACK to data packet
             else:
+                # 
                 if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
                     set_data_packet_parameters(packet)
                 else:
@@ -131,7 +135,7 @@ def parse_packet(packet):
 
                 # 16 as flags sets ACK bit
 
-                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
+                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
             # or the first fin in the teardown sequence
             else:
                 # first send an ACK
@@ -142,7 +146,7 @@ def parse_packet(packet):
                 # Sequence number doesn't matter here
                 # 16 as flags sets ACK bit
 
-                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
+                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
 
                 
                 # then send a FIN
@@ -152,7 +156,7 @@ def parse_packet(packet):
 
                 # 16 as flags sets ACK bit
 
-                build_packet(SRC, DST, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=b"", window=0)
+                build_packet(SRC, DST, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
     
     return
 

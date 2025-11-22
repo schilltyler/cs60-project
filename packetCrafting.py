@@ -122,17 +122,17 @@ build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
 
 
 
-def build_syn(src_port, dst_port, seq_num, ack_num, data, window):
-    # we want to send back to the source port that sent to us
-    src_port: int = src_port
-    dst_port: int = dst_port
-    seq_num: int = 1
-    ack_num: int = rec_seq_num + 1
-    flags: int = 2     # 00010010 (sets the ACK and SYN bits)
-    data: bytes = b""
-    window: int = 0 # 0 for now until we figure out if we need it
+# def build_syn(src_port, dst_port, seq_num, ack_num, data, window):
+#     # we want to send back to the source port that sent to us
+#     src_port: int = src_port
+#     dst_port: int = dst_port
+#     seq_num: int = 1
+#     ack_num: int = rec_seq_num + 1
+#     flags: int = 2     # 00010010 (sets the ACK and SYN bits)
+#     data: bytes = b""
+#     window: int = 0 # 0 for now until we figure out if we need it
 
-    sequence_nums_sent.append(seq_num)
-    data_sizes_sent.append(len(data))
-    pass
+#     sequence_nums_sent.append(seq_num)
+#     data_sizes_sent.append(len(data))
+#     pass
 
