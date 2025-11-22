@@ -1,17 +1,12 @@
 from scapy.all import *
 import threading
 from scapy.layers.inet import UDP
+import time
 
 """
-FLAGS FORMAT:
-Will be a string with order:
-    CWR | ECE | URG | ACK | PSH | RST | SYN | FIN
-
-eg.
-SYN    = 00000010
-ACK    = 00010000
-SYNACK = 00010010
+Defines
 """
+TIMEOUT: int = 0.5
 
 """
 Globals
@@ -22,12 +17,21 @@ sequence_nums_sent = []
 fin_nums_sent = []
 # keeps track of sizes of the data we have sent
 data_sizes_sent = []
-# keeps track of the packets we have sent
-packets_sent = []
+# keeps track of the packets we have sent seq # -> packet
+packets_sent = {}
 # list of data to put in packets
 data_to_send = []
-# the sequence number of the last acknowledged packet
-#last_acked_packet
+# first unACK'd sequence number
+base: int
+# next sequence number to assign
+nextSeq: int
+# window size
+window: int
+# keeps track of packets we have received ACKs for
+packets_acknowledged = []
+# keeps track of timers on packets seq # -> timer
+timers = {}
+
 
 
 """
@@ -49,7 +53,7 @@ def set_data_packet_parameters(packet):
     seq_num: int = 0
     ack_num: int = 1
     data_offset: int = 3 # 3 * 4 bytes (12 byte header)
-    flags: int = 0 # data transfer mode, no flags needed
+    flags: int = 16 # set ACK bit
     data: bytes = b""
     window: int = 0
     checksum: int = 0
@@ -92,19 +96,23 @@ def verify_checksum(data):
     missing_packets: list of sequence numbers that were not received
 """
 def handle_error(missing_packets):
-
-    for i in missing_packets:
-        pass
-
-    return
+    # check the timers on the packets we have sent and not gotten acknowledged
+    for seq_num in list(timers.keys()):
+        # check if current time minus the start time is greater than the timeout
+        if time.time() - timers[seq_num] > TIMEOUT:
+            print(f"Timeout on packet seq: {seq}")
+                # resend only this packet
+                send(seq_num, packets_sent[seq_num])
 
 
 """
 This function will take the packet built by build_packet() and
 simply use the send() function to send it to its destination
 """
-def send_packet(packet):
+def send_packet(seq_num, packet):
     send(packet)
+    # start the timer on this packet
+    timers[seq_num] = time.time()
     return
 
 """
@@ -157,7 +165,7 @@ def build_packet(sport, dport, sequence_num, ack_num, data_offset, flags, data, 
     # 127.0.0.1 is placeholder
     packet = IP(dst='127.0.0.1') / UDP(sport=sport, dport=dport) / Raw(header_and_data)
 
-    send_packet(packet)
+    send_packet(sequence_num, packet)
 
     return
 
@@ -185,16 +193,18 @@ def parse_packet(packet):
             return
 
         # rec_data is an array of bytes, not bits (so we index based on bytes)
-        rec_data: bytes = raw_layer.load
-        rec_flags: int = int.from_bytes(rec_data[10], byteorder='big')
         rec_seq_num: int = int.from_bytes(rec_data[0:4], byteorder='big')
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
+        rec_data_offset: int = int.from_bytes(rec_data[9], byteorder='big')
+        rec_flags: int = int.from_bytes(rec_data[10], byteorder='big')
+        rec_data: bytes = raw_layer.load
 
         # print received packet
         print("Received Packet:")
-        print("Flags: " + rec_flags)
-        print("Seq Num: " + rec_seq_num)
-        print("Ack Num: " + rec_ack_num)
+        print("Flags: " + str(rec_flags))
+        print("Seq Num: " + str(rec_seq_num))
+        print("Ack Num: " + str(rec_ack_num))
+        print("Data: " + rec_data.decode('utf-8'))
 
         # SYN set
         if rec_flags == 2:
@@ -233,7 +243,7 @@ def parse_packet(packet):
 
         # ACK set
         elif rec_flags == 16:
-            if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
+            if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + 1:
                 # handshake complete, start sending data
                 set_data_packet_parameters(packet)
 
@@ -244,7 +254,7 @@ def parse_packet(packet):
                 pass
 
             else:
-                if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
+                if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + data_sizes_sent[len(data_sizes_sent) - 1]:
                     set_data_packet_parameters(packet)
                 else:
                     # error sending data . . . resend
@@ -293,7 +303,7 @@ def parse_packet(packet):
                 seq_num: int = rec_ack_num
                 ack_num: int = rec_seq_num + 1
                 data_offset: int = 3
-                flags: int = 16    # 00010000 (sets only ACK bit)
+                flags: int = 1    # 00000001 (sets only FIN bit)
                 data: bytes = b""
                 window: int = 0
                 checksum: int = 0
