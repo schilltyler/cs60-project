@@ -1,6 +1,6 @@
 from scapy.all import *
 import threading
-from scapy.layers.inet import Ether, IP, UDP, Raw, sendp
+from scapy.layers.inet import Ether, IP, UDP, Raw, send
 
 """
 FLAGS FORMAT:
@@ -21,13 +21,10 @@ Globals
 sequence_nums_sent = []
 # keeps track of the fin-related sequence numbers we have sent
 fin_nums_sent = []
-
 # keeps track of sizes of the data we have sent
 data_sizes_sent = []
-
 # keeps track of the packets we have sent
 packets_sent = []
-
 # list of data to put in packets
 data_to_send = []
 
@@ -65,6 +62,8 @@ def set_data_packet_parameters(packet):
 
 
 
+
+
 def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
     """
     This function builds a TCP packet with the given parameters.
@@ -81,6 +80,8 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
         window, :
     """
+    # IP layer to indicate destination IP address
+    ip_layer = IP(dst="127.0.0.1")
     # UDP layer to indicate source and destination ports
     udp_layer = UDP(sport=sport, dport=dport)
 
@@ -99,6 +100,11 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
     message += format(0, '016b')    # 2 bytes       Window Bits  - Need to figure this part out
 
+    pkt = ip_layer / udp_layer / Raw(load=message)
+
+
+    send(pkt)
+
 
     # # Need logic to calculate checksum
     # message += "\nChecksum"         # 2 bytes       Checksum - to be calculated later
@@ -108,44 +114,25 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
     # Data TOREPLACE - NEED to see how packet size is determined and how to split data between packets
 
-    return message
+    # return message
 
-mess = build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
-print(mess)
-
+build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
 
 
 
 
-# def syn_on_command():
-#     confirm = input("Start TCP connection? (y/n): ")
-#         if confirm.lower() == 'y':
-#             send_syn_packet()
-#     return
 
+def build_syn(src_port, dst_port, seq_num, ack_num, data, window):
+    # we want to send back to the source port that sent to us
+    src_port: int = src_port
+    dst_port: int = dst_port
+    seq_num: int = 1
+    ack_num: int = rec_seq_num + 1
+    flags: int = 2     # 00010010 (sets the ACK and SYN bits)
+    data: bytes = b""
+    window: int = 0 # 0 for now until we figure out if we need it
 
-"""
-This function will start the TCP connection by sending a SYN segment
+    sequence_nums_sent.append(seq_num)
+    data_sizes_sent.append(len(data))
+    pass
 
-Notes:
-* start by sending a SYN packet
-* only want one side to send this though(?)
-"""
-
-# # Need MAC and IP addresses from received packet to build response packets
-# # Also need a wat to initiate the connection from one side
-
-# # populate the array of data
-# for i in range(1, 50):
-#     data_to_send.append(f"data packet {i}")
-
-# # send a SYN packet
-
-# # Call sniffing function in a separate thread
-# sniff_thread = threading.Thread(target=sniff)
-# sniff_thread.start()
-
-
-
-# # Send data packets here
-# # Can be

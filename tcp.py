@@ -2,6 +2,8 @@ from scapy.all import *
 import threading
 from scapy.layers.inet import Ether, IP, UDP, Raw, send
 
+from packetCrafting import build_packet, set_data_packet_parameters
+
 """
 FLAGS FORMAT:
 Will be a string with order:
@@ -46,29 +48,6 @@ def sniff():
 
 
 
-def set_data_packet_parameters(packet):
-    src_port: int = 5555
-    dst_port: int = packet[UDP].sport
-    seq_num: int = 0
-    ack_num: int = 1
-    flags: int = 0 # data transfer mode, no flags needed
-    data: bytes = b""
-    window: int = 0
-
-    # add to our tracking lists
-    sequence_nums_sent.append(seq_num)
-    data_sizes_sent.append(len(data))
-
-
-    # If splitting data into multiple packets is needed, do it here
-    # Convert data to bytes
-    # Split into chunks of PACKET_SIZE
-    # For each chunk, call build_packet with that chunk as data
-
-    build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
-
-
-
 
 """
 This function parses the TCP header within the data section
@@ -97,36 +76,30 @@ def parse_packet(packet):
         print("Seq Num: " + rec_seq_num)
         print("Ack Num: " + rec_ack_num)
 
+        SRC = 5555
+        DST = packet[UDP].sport
+        ACK_NUM = rec_seq_num + 1
+
         # SYN set
         if rec_flags == 2:
-            # we want to send back to the source port that sent to us
-            src_port: int = 5555
-            dst_port: int = packet[UDP].sport
-            seq_num: int = 1
-            ack_num: int = rec_seq_num + 1
-            flags: int = 18     # 00010010 (sets the ACK and SYN bits)
-            data: bytes = b""
-            window: int = 0 # 0 for now until we figure out if we need it
 
-            sequence_nums_sent.append(seq_num)
-            data_sizes_sent.append(len(data))
+            sequence_nums_sent.append(1)
+            data_sizes_sent.append(0)
 
-            build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+            # Not sure what to do about window yet, 0 until figure it out
+            # 18 as flags sets both SYN and ACK bits
+
+            build_packet(SRC, DST, sequence_num=1, ack_num=ACK_NUM, flags=18, data=b"", window=0)
 
         # SYN and ACK set
         elif rec_flags == 18:
-            src_port: int = 5555
-            dst_port: int = packet[UDP].sport
-            seq_num: int = 0
-            ack_num: int = rec_seq_num + 1
-            flags: int = 16    # 00010000 (sets only ACK bit)
-            data: bytes = b""
-            window: int = 0
 
-            sequence_nums_sent.append(seq_num)
-            data_sizes_sent.append(len(data))
+            sequence_nums_sent.append(0)
+            data_sizes_sent.append(0)
 
-            build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+            # 16 as flags sets ACK bit
+
+            build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
 
         # ACK set
         elif rec_flags == 16:
@@ -145,126 +118,44 @@ def parse_packet(packet):
                     set_data_packet_parameters(packet)
                 else:
                     # error sending data . . . resend
-                    send_packet(packets_sent[len(packets_sent) - 1])
+                    send(packets_sent[len(packets_sent) - 1])
 
         # FIN set
         elif rec_flags == 1:
             # check if this is a response to a FIN
             if rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
                 # what do we do if we did not receive ack before this?
-                src_port: int = 5555
-                dst_port: int = packet[UDP].sport
-                seq_num: int = 0 # doesn't matter what this is
-                ack_num: int = rec_seq_num + 1
-                flags: int = 16    # 00010000 (sets only ACK bit)
-                data: bytes = b""
-                window: int = 0
 
-                sequence_nums_sent.append(seq_num)
-                data_sizes_sent.append(len(data))
+                sequence_nums_sent.append(0)
+                data_sizes_sent.append(0)
 
-                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+                # 16 as flags sets ACK bit
+
+                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
             # or the first fin in the teardown sequence
             else:
                 # first send an ACK
-                src_port: int = 5555
-                dst_port: int = packet[UDP].sport
-                seq_num: int = 0 # doesn't matter what this is
-                ack_num: int = rec_seq_num + 1
-                flags: int = 16    # 00010000 (sets only ACK bit)
-                data: bytes = b""
-                window: int = 0
 
-                sequence_nums_sent.append(seq_num)
-                data_sizes_sent.append(len(data))
+                sequence_nums_sent.append(0)
+                data_sizes_sent.append(0)
 
-                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+                # Sequence number doesn't matter here
+                # 16 as flags sets ACK bit
+
+                build_packet(SRC, DST, sequence_num=0, ack_num=ACK_NUM, flags=16, data=b"", window=0)
+
                 
                 # then send a FIN
-                src_port: int = 5555
-                dst_port: int = packet[UDP].sport
-                seq_num: int = rec_ack_num
-                ack_num: int = rec_seq_num + 1
-                flags: int = 16    # 00010000 (sets only ACK bit)
-                data: bytes = b""
-                window: int = 0
 
-                fin_nums_sent.append(seq_num)
-                data_sizes_sent.append(len(data))
+                fin_nums_sent.append(rec_ack_num)
+                data_sizes_sent.append(0)
 
-                build_packet(src_port, dst_port, seq_num, ack_num, flags, data, window)
+                # 16 as flags sets ACK bit
+
+                build_packet(SRC, DST, sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=b"", window=0)
     
     return
 
-
-
-
-
-def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
-    """
-    This function builds a TCP packet with the given parameters.
-
-    Arguments:
-        sport,          Integer: source port
-        dport,          Integer: destination port
-        ack_num,        Integer: acknowledgment number
-        sequence_num,   Integer: sequence number
-
-        flags,          Integer: Integer number representing TCP flags
-
-        data, :
-
-        window, :
-    """
-    # IP layer to indicate destination IP address
-    ip_layer = IP(dst="127.0.0.1")
-    # UDP layer to indicate source and destination ports
-    udp_layer = UDP(sport=sport, dport=dport)
-
-    # String to store the binary representation of the packet
-    message = ""
-
-    # Build the TCP header
-    message += format(sequence_num, '032b')
-    message += format(ack_num, '032b')
-
-
-    message += "0101"               # 4 bits        Offset (in 4byte words) to start of data section (Min:5 Max:15)
-    message += "0000"               # 4 bits        These must be set to 0
-
-    message += format(flags, '08b') # 8 bits        Flags
-
-    message += format(0, '016b')    # 2 bytes       Window Bits  - Need to figure this part out
-
-    pkt = ip_layer / udp_layer / Raw(load=message)
-
-
-    send_packet(pkt)
-
-
-    # # Need logic to calculate checksum
-    # message += "\nChecksum"         # 2 bytes       Checksum - to be calculated later
-    # # Need logic to set ugrent pointer if needed
-    # message += "\nurgent pointer"   # 2 bytes       Urgent Pointer - only used if URG flag is set
-    # Options TOREPLACE (if using this then need to change data offset and check how long this is)
-
-    # Data TOREPLACE - NEED to see how packet size is determined and how to split data between packets
-
-    # return message
-
-mess = build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
-print(mess)
-
-
-
-
-"""
-This function will take the packet built by build_packet() and
-simply use the send() function to send it to its destination
-"""
-def send_packet(packet):
-    send(packet)
-    return
 
 
 
@@ -278,6 +169,11 @@ def handle_error(missing_packets):
         pass
     
     return
+
+
+
+
+
 
 """
 This function will start the TCP connection by sending a SYN segment
