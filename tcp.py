@@ -1,6 +1,6 @@
 from scapy.all import *
 import threading
-from scapy.layers.inet import Ether, IP, UDP, Raw, sendp
+from scapy.layers.inet import Ether, IP, UDP, Raw, send
 
 """
 FLAGS FORMAT:
@@ -216,6 +216,8 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
         window, :
     """
+    # IP layer to indicate destination IP address
+    ip_layer = IP(dst="127.0.0.1")
     # UDP layer to indicate source and destination ports
     udp_layer = UDP(sport=sport, dport=dport)
 
@@ -234,6 +236,11 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
     message += format(0, '016b')    # 2 bytes       Window Bits  - Need to figure this part out
 
+    pkt = ip_layer / udp_layer / Raw(load=message)
+
+
+    send_packet(pkt)
+
 
     # # Need logic to calculate checksum
     # message += "\nChecksum"         # 2 bytes       Checksum - to be calculated later
@@ -243,7 +250,7 @@ def build_packet(sport, dport, sequence_num, ack_num, flags, data, window):
 
     # Data TOREPLACE - NEED to see how packet size is determined and how to split data between packets
 
-    return message
+    # return message
 
 mess = build_packet(1234, 5678, 0, 0, 16, "Hello, World!", 1024)
 print(mess)
@@ -284,28 +291,38 @@ def main():
     # Need MAC and IP addresses from received packet to build response packets
     # Also need a wat to initiate the connection from one side
 
-    mac = input("Enter destination MAC address: ")
+    # Start listening
+
     ipad = input("Enter destination ip address: ")
 
     # Need to have the option to either continuously listen for syn or send a syn
     choice = input("Enter 'i' to initiate connection or 'l' to listen: ")
 
-    if choice == 'l':
-        # Start listening
-        pass
-
-    elif choice == 'i':
-        mac = input("Enter destination MAC address: ")
+    # If initiating connection, send SYN packet
+    if choice == 'i':
         ipad = input("Enter destination ip address: ")
 
-        # Start listening
         # Send syn
+
+
+
 
     # Start listening in the background anyway on a separate thread
     # On this thread handle user input to send data packets when needed
+    # Need to have initiator mode and listener mode
+    # Initiator mode sends SYN packets until connection is established
+    # Listener mode just listens for SYN packets and responds accordingly
+    # No
+    # Large part of this is that you can send and receieve at the same time
+    # Who starts the connection then?????
+    # Connection only starts when one side is prompted to send something
+    # In our continuous listening thread we can have a user input prompt to start the connection
+    # How to do this??
 
-    mac = "00:11:22:33:44:55"
-    ipad = "127.0.0.1"
+    # # Set ip address of target here
+    # ipad = "127.0.0.1"
+
+    # Sending data in the parser function so need to pass addresses there
 
 
 
