@@ -118,6 +118,7 @@ def parse_packet(packet, crafter):
 
         # SYN and ACK set
         elif rec_flags == 18:
+            print("\nGOT SYNACK\n\n")
             # 16 as flags sets ACK bit
             pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
             send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
@@ -125,26 +126,31 @@ def parse_packet(packet, crafter):
 
         # ACK set
         elif rec_flags == 16:
+            print("\nGOT ACK\n\n")
 
             # handshake complete, start sending data
-            if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + 1:
+            if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + 1:
                 # set_data_packet_parameters(packet)
+                print("op1")
                 pass
 
             # check if is an ACK to a FIN
             elif rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
                 # want to see if we are ready to receive a FIN from other side
                 # or if we have more data to send
+                print("op2")
                 pass
 
             # ACK to data packet
             else:
                 # 
-                if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent - 1)] + data_sizes_sent[len(data_sizes_sent - 1)]:
+                if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + data_sizes_sent[len(data_sizes_sent) - 1]:
                     # set_data_packet_parameters(packet)
+                    print("op3")
                     pass
                 else:
                     # error sending data . . . resend
+                    print("op4")
                     send(packets_sent[len(packets_sent) - 1])
 
         # FIN set
