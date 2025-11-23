@@ -4,6 +4,11 @@ from scapy.layers.inet import Ether, IP, UDP, raw
 
 from SendingCrafter import SendingCrafter
 
+from SendingHelpers import *
+
+
+
+
 
 conf.use_pcap = True
 
@@ -38,17 +43,63 @@ data_to_send = []
 # Need to set a standard packet size to split data into multiple packets if needed
 PACKET_SIZE = 512
 
+# This will be used to stop the program when the user requests it
+stopEvent = threading.Event()
+
 
 
 def start_sniffer(crafter):
     # Start the sniffer with the crafter passed in
-    sniff(
-        iface=crafter.get_iface(),
-        filter="udp and dst port " + str(crafter.get_src_port()),
-        prn=lambda pkt: parse_packet(pkt, crafter),
-        store=False
-    )
+    while not stopEvent.is_set():
+        sniff(
+            iface=crafter.get_iface(),
+            filter="udp and dst port " + str(crafter.get_src_port()),
+            prn=lambda pkt: parse_packet(pkt, crafter),
+            store=False,
+            timeout=1,
+            count=1
+        )
 
+
+def parse_user_input(crafter):
+    while True:
+        if (crafter.get_dst_ip() == None):
+            print("\n\n\n")
+            print("*****************************************")
+            print("Following options:")
+            print("    O to try opening new TCP connection")
+            print("    Q to shutdown")
+            print(" ")
+            command = input("Please make a selection: ")
+
+            if command == "O":
+                print("New connection attempt requested. ")
+                new_connection_target(crafter)
+            
+            elif command == "Q":
+                print("Shutdown requested. ")
+                # This will stop the sniffer from running and close the program
+                stopEvent.set()
+                break
+        
+        else:
+            print("\n\n\n")
+            print("*****************************************")
+            print("Following options:")
+            print("    F to close connection")
+            print("    M to make a message to send")
+            print(" ")
+            command = input("Please make a selection: ")
+
+            if command == "F":
+                print("User requested connection termination. ")
+                send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
+            
+            elif command == "M":
+                message = input("Message: ")
+                # Send message (in data field) to other side
+                # send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
+            
 
 
 
@@ -76,75 +127,71 @@ def parse_packet(packet, crafter):
         # rec_data is an array of bytes, not bits (so we index based on bytes)
         rec_data: bytes = raw_layer.load
 
-        print(rec_data)
-
         # Single byte does not need conversion (it is already an int)
         rec_flags: int = rec_data[9]
-
         # Convert 4 byte slices to integers
         rec_seq_num: int = int.from_bytes(rec_data[0:4], byteorder='big')
         rec_ack_num: int = int.from_bytes(rec_data[4:8], byteorder='big')
 
-        for i in rec_data:
-            print(i)
+        # for i in rec_data:
+        #     print(i)
 
-        # print received packet
         print("\nReceived Packet:")
         print("Flags: ", rec_flags)
         print("Seq Num: ", rec_seq_num)
         print("Ack Num: " , rec_ack_num)
 
         ACK_NUM = rec_seq_num + 1
-        E_DATA = b""
 
 
-        # SYN set - This is a new connection
+        # Received a SYN - this is a new connection
         if rec_flags == 2:
-            print("\nGOT SYN\n\n")
+            # print("\nGOT SYN\n\n")
             # Get the port and ip from the new connection initiator
             dst_port = packet[UDP].sport
             dst_ip = packet[IP].src
 
             # Edit crafting object to set destination ip and port
             crafter.set_dest(dst_ip, dst_port)
-
-            print(crafter.get_dst_port())
+            # print(crafter.get_dst_port())
 
             # Not sure what to do about window yet, 0 until figure it out
-            # 18 as flags sets both SYN and ACK bits
-            pkt = crafter.build_packet(sequence_num=1, ack_num=ACK_NUM, flags=18, data=E_DATA, window=0)
-            send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
+            send_SYNACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
 
 
-        # SYN and ACK set
+
+        # Received a SYNACK
         elif rec_flags == 18:
-            print("\nGOT SYNACK\n\n")
-            # 16 as flags sets ACK bit
-            pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
-            send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
+            # print("\nGOT SYNACK\n\n")
+            send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
+            # Start SENDING data
 
 
-        # ACK set
+        # Received an ACK
         elif rec_flags == 16:
             print("\nGOT ACK\n\n")
+            # print(sequence_nums_sent)
+            # print(fin_nums_sent)
 
-            # handshake complete, start sending data
-            if rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + 1:
+            # Handshake complete, start RECEIVING data - Wont this also be ACK to a data packet???
+            if rec_ack_num == sequence_nums_sent[-1] + 1:
                 # set_data_packet_parameters(packet)
-                print("op1")
-                pass
+                print("\nHandshake Complete!!\nConnection is established\nNow receiving data:\n\n")
 
-            # check if is an ACK to a FIN
-            elif rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
-                # want to see if we are ready to receive a FIN from other side
-                # or if we have more data to send
-                print("op2")
-                pass
+            # Check if is an ACK to a FIN we sent
+            elif (rec_ack_num == fin_nums_sent[-1] + 1):
+                # If final ACK received, close connection
+                if (crafter.get_closing() == True):
+                    # In this case we need to close the connection and reset variables
+                    crafter.wipe_dest()
+                    print("\n\n Connection closed\n")
+                    crafter.set_closing(False)
+
 
             # ACK to data packet
             else:
                 # 
-                if rec_seq_num == 1 and rec_ack_num == sequence_nums_sent[len(sequence_nums_sent) - 1] + data_sizes_sent[len(data_sizes_sent) - 1]:
+                if (rec_seq_num == 1) and (rec_ack_num == (sequence_nums_sent[-1] + data_sizes_sent[-1])):
                     # set_data_packet_parameters(packet)
                     print("op3")
                     pass
@@ -153,34 +200,33 @@ def parse_packet(packet, crafter):
                     print("op4")
                     send(packets_sent[len(packets_sent) - 1])
 
-        # FIN set
-        elif rec_flags == 1:
-            # check if this is a response to a FIN
-            if rec_ack_num == fin_nums_sent[len(fin_nums_sent) - 1] + 1:
-                # what do we do if we did not receive ack before this?
+        # Received a FIN
+        elif rec_flags == 17:
+            # print("GOT FIN")
+            # print(fin_nums_sent)
 
-                # 16 as flags sets ACK bit
-                pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
-                send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
+            # If we get a FIN that is replying to our FIN
+            if (fin_nums_sent != []) and (rec_ack_num == fin_nums_sent[- 1] + 1):
+                # Send back an ACK
+                send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
+
+                # In this case we need to close the connection and reset variables
+                crafter.wipe_dest()
+                print("\n\n Connection closed\n")
             
 
-            # or the first fin in the teardown sequence
+            # If the other side started the connection closure
             else:
-                # first send an ACK
+                # First send an ACK
+                send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
 
-                # Sequence number doesn't matter here
-                # 16 as flags sets ACK bit
-                pkt = crafter.build_packet(sequence_num=0, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
-                send_and_log_packet(pkt, sequence_nums_sent, 0, 0)
+                # Then send a FIN
+                send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, rec_ack_num, ACK_NUM)
+
+                # Leave connection open here waiting for final ACK from other side
+                crafter.set_closing(True)
 
                 
-                # then send a FIN
-
-                # 16 as flags sets ACK bit
-                pkt = crafter.build_packet(sequence_num=rec_ack_num, ack_num=ACK_NUM, flags=16, data=E_DATA, window=0)
-                send_and_log_packet(pkt, fin_nums_sent, rec_ack_num, 0)
-    
-    return
 
 
 
@@ -217,6 +263,25 @@ def handle_error(missing_packets):
 
 
 
+def new_connection_target(crafter):
+    dst_ip = input("Enter destination ip address: ")
+    dst_port = input("Enter destination port: ")
+
+    # Edit crafting object to set destination ip and port
+    crafter.set_dest(dst_ip, dst_port)
+    send_SYN_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, 0)
+
+
+
+
+# def terminate_connection(crafter):
+#     # Send FIN to initiate connection closure
+#     send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
+
+
+
+
+
 
 """
 This function will start the TCP connection by sending a SYN segment
@@ -244,17 +309,15 @@ def main():
     choice = input("Enter 'i' to initiate connection or 'l' to listen: ")
 
 
-    # If initiating connection, send SYN packet
+    # If initiating connection
     if choice == 'i':
-        dst_ip = input("Enter destination ip address: ")
-        dst_port = input("Enter destination port: ")
+        # Get the target from user and send a SYN
+        new_connection_target(crafter)
+    
 
-        # Edit crafting object to set destination ip and port
-        crafter.set_dest(dst_ip, dst_port)
-
-        pkt = crafter.build_packet(sequence_num=0, ack_num=0, flags=2, data=b"", window=0)
-        send_and_log_packet(pkt, sequence_nums_sent, 1, 0)
-
+    # Start a thread to get user input
+    in_thread = threading.Thread(target=parse_user_input, args=(crafter,))
+    in_thread.start()
 
 
     # # populate the array of data
@@ -263,9 +326,6 @@ def main():
 
     # Send data packets here
     # Can be
-
-    
-    return
 
 
 

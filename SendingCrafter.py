@@ -1,7 +1,5 @@
 from scapy.all import *
-import threading
 from scapy.layers.inet import IP, UDP
-import math
 
 """
 FLAGS FORMAT:
@@ -31,10 +29,22 @@ class SendingCrafter():
 
         self.dst_ip = None
         self.dst_port = None
+
+        self.closing = False
     
     def set_dest(self, dst_ip, dst_port):
         self.dst_ip = dst_ip
         self.dst_port = dst_port
+    
+    def wipe_dest(self):
+        self.dst_ip = None
+        self.dst_port = None
+    
+    def set_closing(self, val):
+        self.closing = val
+    
+    def get_closing(self):
+        return self.closing
     
     def get_iface(self):
         return self.iface
