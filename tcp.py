@@ -98,6 +98,7 @@ def parse_user_input(crafter):
             elif command == "M":
                 message = input("Message: ")
                 # Send message (in data field) to other side
+                # send_DATA_and_log()
                 # send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
             
 
@@ -169,14 +170,13 @@ def parse_packet(packet, crafter):
 
         # Received an ACK
         elif rec_flags == 16:
-            print("\nGOT ACK\n\n")
+            # print("\nGOT ACK\n\n")
             # print(sequence_nums_sent)
-            # print(fin_nums_sent)
 
             # Handshake complete, start RECEIVING data - Wont this also be ACK to a data packet???
             if rec_ack_num == sequence_nums_sent[-1] + 1:
-                # set_data_packet_parameters(packet)
                 print("\nHandshake Complete!!\nConnection is established\nNow receiving data:\n\n")
+                # Receive data here
 
             # Check if is an ACK to a FIN we sent
             elif (rec_ack_num == fin_nums_sent[-1] + 1):
@@ -198,7 +198,7 @@ def parse_packet(packet, crafter):
                 else:
                     # error sending data . . . resend
                     print("op4")
-                    send(packets_sent[len(packets_sent) - 1])
+                    send(packets_sent[-1])
 
         # Received a FIN
         elif rec_flags == 17:
@@ -235,21 +235,6 @@ def parse_packet(packet, crafter):
 
 
 
-
-"""
-    Function to send packets and log key info about the for future use
-"""
-def send_and_log_packet(packet, l1, slog, dlog):
-
-    l1.append(slog)
-    data_sizes_sent.append(dlog)
-
-    send(packet)
-
-
-
-
-
 """
     missing_packets: list of sequence numbers that were not received
 """
@@ -263,6 +248,7 @@ def handle_error(missing_packets):
 
 
 
+
 def new_connection_target(crafter):
     dst_ip = input("Enter destination ip address: ")
     dst_port = input("Enter destination port: ")
@@ -270,14 +256,6 @@ def new_connection_target(crafter):
     # Edit crafting object to set destination ip and port
     crafter.set_dest(dst_ip, dst_port)
     send_SYN_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, 0)
-
-
-
-
-# def terminate_connection(crafter):
-#     # Send FIN to initiate connection closure
-#     send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
-
 
 
 
@@ -319,13 +297,6 @@ def main():
     in_thread = threading.Thread(target=parse_user_input, args=(crafter,))
     in_thread.start()
 
-
-    # # populate the array of data
-    # for i in range(1, 50):
-    #     data_to_send.append(f"data packet {i}")
-
-    # Send data packets here
-    # Can be
 
 
 

@@ -30,6 +30,21 @@ def send_FIN_and_log(crafter, log1, log2, val2, sequence_num, ack_num):
 
 
 
+def send_DATA_and_log(crafter, log1, val1, log2, val2, sequence_num, ack_num):
+    # Convert data to bytes
+
+
+    pkt = crafter.build_packet(sequence_num=sequence_num, ack_num=ack_num, flags=17, data=b"hello", window=0)
+
+    # Split bytes between packets
+    
+
+    # Send packets
+
+    return
+
+
+
 """
     Function to send packets and log key info about the for future use
 """
