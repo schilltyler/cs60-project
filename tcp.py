@@ -95,7 +95,7 @@ def parse_user_input(crafter, sender):
             
             elif command == "M":
                 message = input("Message: ")
-                sender.send_DATA_and_log(crafter, sequence_nums_sent, 50, data_sizes_sent, 0, 50, 20, message)
+                sender.send_DATA_and_log(crafter, message)
             
 
 
@@ -251,7 +251,7 @@ def new_connection_target(crafter, sender):
 
     # Edit crafting object to set destination ip and port
     crafter.set_dest(dst_ip, dst_port)
-    sender.send_SYN_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 1)
+    sender.send_SYN_and_log(crafter)
 
 
 
