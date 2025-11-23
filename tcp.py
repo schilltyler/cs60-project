@@ -167,7 +167,7 @@ def parse_packet(packet, crafter, sender):
             # print("\nGOT ACK\n\n")
 
             # Handshake complete, start RECEIVING data - Wont this also be ACK to a data packet???
-            if rec_ack_num == sequence_nums_sent[-1] + 1:
+            if rec_ack_num == sender.get_last_seq_sent() + 1:
                 print("\nHandshake Complete!!\nConnection is established\nNow receiving data:\n\n")
                 # Receive data here
 

@@ -10,6 +10,7 @@ class SendingHelper:
         self.ack_num = 0
 
         self.fin_num_sent = None
+        self.last_seq_sent = None
         # self.crafter = crafter
     
     def increment_ack(self, data_size):
@@ -17,11 +18,15 @@ class SendingHelper:
     
     def get_fin_num_sent(self):
         return self.fin_num_sent
+    
+    def get_last_seq_sent(self):
+        return self.last_seq_sent
 
     # Sending a SYN and increment Sequence number
     def send_SYN_and_log(self, crafter):
         pkt = crafter.build_packet(sequence_num=self.seq_num, ack_num=self.ack_num, flags=2, data=b"", window=0)
         send_and_log_packet(pkt)
+        self.last_seq_sent = self.seq_num
         self.seq_num += 1
 
 
@@ -29,6 +34,7 @@ class SendingHelper:
     def send_SYNACK_and_log(self, crafter):
         pkt = crafter.build_packet(sequence_num=self.seq_num, ack_num=self.ack_num, flags=18, data=b"", window=0)
         send_and_log_packet(pkt)
+        self.last_seq_sent = self.seq_num
         self.seq_num += 1
 
 
@@ -43,6 +49,7 @@ class SendingHelper:
         pkt = crafter.build_packet(sequence_num=self.seq_num, ack_num=self.ack_num, flags=17, data=b"", window=0)
         send_and_log_packet(pkt)
         self.fin_num_sent = self.seq_num
+        # self.last_seq_sent = self.seq_num
         self.seq_num += 1
 
 
