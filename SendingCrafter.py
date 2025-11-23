@@ -21,7 +21,7 @@ PACKET_SIZE = 512
 
 
 
-class SendingCrafter():
+class SendingCrafter:
 
     def __init__(self, iface, src_port):
         self.iface = iface
@@ -101,7 +101,7 @@ class SendingCrafter():
         payload = mint.to_bytes(nbs, byteorder='big')
 
         # Create packet by stacking layers
-        pkt = ip_layer / udp_layer / Raw(payload)
+        pkt = ip_layer / udp_layer / Raw(payload + data)
 
         # Return the created packet
         return pkt

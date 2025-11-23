@@ -4,7 +4,7 @@ from scapy.layers.inet import Ether, IP, UDP, raw
 
 from SendingCrafter import SendingCrafter
 
-from SendingHelpers import *
+from SendingHelper import SendingHelper
 
 
 
@@ -29,10 +29,8 @@ Globals
 """
 # keeps track of the sequence numbers we have sent
 sequence_nums_sent = []
-# keeps track of the fin-related sequence numbers we have sent
-fin_nums_sent = []
-# keeps track of sizes of the data we have sent
-data_sizes_sent = []
+
+
 # keeps track of the packets we have sent
 packets_sent = []
 # list of data to put in packets
@@ -48,20 +46,20 @@ stopEvent = threading.Event()
 
 
 
-def start_sniffer(crafter):
+def start_sniffer(crafter, sender):
     # Start the sniffer with the crafter passed in
     while not stopEvent.is_set():
         sniff(
             iface=crafter.get_iface(),
             filter="udp and dst port " + str(crafter.get_src_port()),
-            prn=lambda pkt: parse_packet(pkt, crafter),
+            prn=lambda pkt: parse_packet(pkt, crafter, sender),
             store=False,
             timeout=1,
             count=1
         )
 
 
-def parse_user_input(crafter):
+def parse_user_input(crafter, sender):
     while True:
         if (crafter.get_dst_ip() == None):
             print("\n\n\n")
@@ -74,7 +72,7 @@ def parse_user_input(crafter):
 
             if command == "O":
                 print("New connection attempt requested. ")
-                new_connection_target(crafter)
+                new_connection_target(crafter, sender)
             
             elif command == "Q":
                 print("Shutdown requested. ")
@@ -93,13 +91,11 @@ def parse_user_input(crafter):
 
             if command == "F":
                 print("User requested connection termination. ")
-                send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
+                sender.send_FINACK_and_log(crafter)
             
             elif command == "M":
                 message = input("Message: ")
-                # Send message (in data field) to other side
-                # send_DATA_and_log()
-                # send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, 100, 100)
+                sender.send_DATA_and_log(crafter, sequence_nums_sent, 50, data_sizes_sent, 0, 50, 20, message)
             
 
 
@@ -116,7 +112,7 @@ TODO:
 * figure out how to start connection (two different programs?)
 * add call to handle_error when sequence numbers are out of order
 """
-def parse_packet(packet, crafter):
+def parse_packet(packet, crafter, sender):
 
     print("Packet received\n\n")
 
@@ -136,42 +132,39 @@ def parse_packet(packet, crafter):
 
         # for i in rec_data:
         #     print(i)
+        # print(rec_data)
 
         print("\nReceived Packet:")
         print("Flags: ", rec_flags)
         print("Seq Num: ", rec_seq_num)
         print("Ack Num: " , rec_ack_num)
 
-        ACK_NUM = rec_seq_num + 1
-
 
         # Received a SYN - this is a new connection
         if rec_flags == 2:
-            # print("\nGOT SYN\n\n")
             # Get the port and ip from the new connection initiator
             dst_port = packet[UDP].sport
             dst_ip = packet[IP].src
 
             # Edit crafting object to set destination ip and port
             crafter.set_dest(dst_ip, dst_port)
-            # print(crafter.get_dst_port())
 
-            # Not sure what to do about window yet, 0 until figure it out
-            send_SYNACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
-
+            # Increment ACK number by 1 and send SYNACK response
+            sender.increment_ack(1)
+            sender.send_SYNACK_and_log(crafter)
 
 
         # Received a SYNACK
         elif rec_flags == 18:
             # print("\nGOT SYNACK\n\n")
-            send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
+            sender.increment_ack(1)
+            sender.send_ACK_and_log(crafter)
             # Start SENDING data
 
 
         # Received an ACK
         elif rec_flags == 16:
             # print("\nGOT ACK\n\n")
-            # print(sequence_nums_sent)
 
             # Handshake complete, start RECEIVING data - Wont this also be ACK to a data packet???
             if rec_ack_num == sequence_nums_sent[-1] + 1:
@@ -179,7 +172,8 @@ def parse_packet(packet, crafter):
                 # Receive data here
 
             # Check if is an ACK to a FIN we sent
-            elif (rec_ack_num == fin_nums_sent[-1] + 1):
+            elif (rec_ack_num == sender.get_fin_num_sent() + 1):
+                print("here")
                 # If final ACK received, close connection
                 if (crafter.get_closing() == True):
                     # In this case we need to close the connection and reset variables
@@ -188,27 +182,29 @@ def parse_packet(packet, crafter):
                     crafter.set_closing(False)
 
 
-            # ACK to data packet
-            else:
-                # 
-                if (rec_seq_num == 1) and (rec_ack_num == (sequence_nums_sent[-1] + data_sizes_sent[-1])):
-                    # set_data_packet_parameters(packet)
-                    print("op3")
-                    pass
-                else:
-                    # error sending data . . . resend
-                    print("op4")
-                    send(packets_sent[-1])
+            # # ACK to data packet
+            # else:
+            #     # 
+            #     if (rec_seq_num == 1) and (rec_ack_num == (sequence_nums_sent[-1] + data_sizes_sent[-1])):
+            #         # set_data_packet_parameters(packet)
+            #         print("op3")
+            #         pass
+            #     else:
+            #         # error sending data . . . resend
+            #         print("op4")
+            #         send(packets_sent[-1])
 
-        # Received a FIN
+        # Received a FINACK
         elif rec_flags == 17:
             # print("GOT FIN")
-            # print(fin_nums_sent)
+
+            # Increment the ack counter becasue the FIN we received takes 1 byte
+            sender.increment_ack(1)
 
             # If we get a FIN that is replying to our FIN
-            if (fin_nums_sent != []) and (rec_ack_num == fin_nums_sent[- 1] + 1):
+            if (sender.get_fin_num_sent() != None) and (rec_ack_num == sender.get_fin_num_sent() + 1):
                 # Send back an ACK
-                send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
+                sender.send_ACK_and_log(crafter)
 
                 # In this case we need to close the connection and reset variables
                 crafter.wipe_dest()
@@ -218,10 +214,10 @@ def parse_packet(packet, crafter):
             # If the other side started the connection closure
             else:
                 # First send an ACK
-                send_ACK_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, ACK_NUM)
+                sender.send_ACK_and_log(crafter)
 
                 # Then send a FIN
-                send_FIN_and_log(crafter, fin_nums_sent, data_sizes_sent, 0, rec_ack_num, ACK_NUM)
+                sender.send_FINACK_and_log(crafter)
 
                 # Leave connection open here waiting for final ACK from other side
                 crafter.set_closing(True)
@@ -249,13 +245,13 @@ def handle_error(missing_packets):
 
 
 
-def new_connection_target(crafter):
+def new_connection_target(crafter, sender):
     dst_ip = input("Enter destination ip address: ")
     dst_port = input("Enter destination port: ")
 
     # Edit crafting object to set destination ip and port
     crafter.set_dest(dst_ip, dst_port)
-    send_SYN_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 0, 0)
+    sender.send_SYN_and_log(crafter, sequence_nums_sent, 0, data_sizes_sent, 1)
 
 
 
@@ -278,8 +274,10 @@ def main():
     # Build crafting object with our port specified
     crafter = SendingCrafter(our_interface, our_port)
 
+    sender = SendingHelper(0)
+
     # Call sniffing function in a separate thread
-    sniff_thread = threading.Thread(target=start_sniffer, args=(crafter,))
+    sniff_thread = threading.Thread(target=start_sniffer, args=(crafter, sender,))
     sniff_thread.start()
 
 
@@ -290,11 +288,11 @@ def main():
     # If initiating connection
     if choice == 'i':
         # Get the target from user and send a SYN
-        new_connection_target(crafter)
+        new_connection_target(crafter, sender)
     
 
     # Start a thread to get user input
-    in_thread = threading.Thread(target=parse_user_input, args=(crafter,))
+    in_thread = threading.Thread(target=parse_user_input, args=(crafter, sender,))
     in_thread.start()
 
 
